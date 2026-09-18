@@ -448,6 +448,14 @@ export function utcDayKey(d = new Date()): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** Calendar yesterday in UTC — not Date.now()-86400000 (DST / length-of-day safe). */
+export function prevUtcDayKey(day = utcDayKey()): string {
+  const [y, m, d] = day.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() - 1);
+  return dt.toISOString().slice(0, 10);
+}
+
 export function daySeed(day = utcDayKey()): number {
   let h = 2166136261;
   for (let i = 0; i < day.length; i++) {

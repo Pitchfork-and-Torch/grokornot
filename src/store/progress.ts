@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { BADGES, type BadgeId } from "@/data/badges";
 import type { GameMode, ModelId, PackId } from "@/data/types";
-import { utcDayKey } from "@/data/library";
+import { prevUtcDayKey, utcDayKey } from "@/data/library";
 
 export type DailyEntry = {
   day: string;
@@ -169,7 +169,7 @@ export const useProgress = create<ProgressState>()(
         if (p.mode === "daily") {
           const today = utcDayKey();
           if (lastDailyDay !== today) {
-            const yesterday = utcDayKey(new Date(Date.now() - 86400000));
+            const yesterday = prevUtcDayKey(today);
             dailyStreak = lastDailyDay === yesterday ? dailyStreak + 1 : 1;
             dailyPlays = dailyPlays + 1;
           }
