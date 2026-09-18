@@ -244,9 +244,12 @@ export const useGame = create<GameState>((set, get) => ({
       pack = parts[0] as PackId;
       seedStr = parts.slice(1).join("-");
     }
-    const seed = hashSeed(seedStr || "challenge");
+    // Trailing -t<score> is the challenge target only — never part of the deck seed,
+    // and must not match a random seed that happens to contain t+digits (e.g. t12ab).
+    const targetMatch = seedStr.match(/-t(\d+)$/);
+    const seedOnly = targetMatch ? seedStr.slice(0, targetMatch.index) : seedStr;
+    const seed = hashSeed(seedOnly || "challenge");
     const deck = dealClassic(pack, seed);
-    const targetMatch = seedStr.match(/t(\d+)/);
     set({
       phase: "playing",
       mode: "classic",
