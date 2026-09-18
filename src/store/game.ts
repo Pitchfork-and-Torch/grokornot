@@ -116,8 +116,8 @@ function dealEndless(seed = Date.now() % 1_000_000_000): Round[] {
   return out;
 }
 
-function dealDaily(): Round[] {
-  const seed = daySeed(utcDayKey());
+function dealDaily(day = utcDayKey()): Round[] {
+  const seed = daySeed(day);
   return shuffleWithSeed(LIBRARY, seed).slice(0, DAILY_SIZE);
 }
 
@@ -286,20 +286,26 @@ export const useGame = create<GameState>((set, get) => ({
     } else {
       seed = hashSeed(raw);
     }
+    const daily = Boolean(dailyMatch);
     const mode: GameMode = endless
       ? "endless"
       : battle
         ? "battle"
         : detective
           ? "detective"
-          : "classic";
+          : daily
+            ? "daily"
+            : "classic";
+    // Daily shares must deal the shared daily deck for that UTC day  -  not classic.
     const deck = endless
       ? dealEndless(seed)
       : detective
         ? dealDetective(seed)
         : battle
           ? []
-          : dealClassic(pack, seed);
+          : daily
+            ? dealDaily(dailyMatch![1]!)
+            : dealClassic(pack, seed);
     const battles = battle ? dealBattles(seed) : [];
     const first = deck[0];
     set({
@@ -314,7 +320,11 @@ export const useGame = create<GameState>((set, get) => ({
         detective && first ? detectiveChoices(first.model, 0) : [],
       challengeSeed: clean,
       challengeTarget: targetMatch ? Number(targetMatch[1]) : null,
-      runSeed: endless || battle || detective ? String(seed) : seedOnly || "challenge",
+      runSeed: daily
+        ? `daily-${dailyMatch![1]!}`
+        : endless || battle || detective
+          ? String(seed)
+          : seedOnly || "challenge",
     });
   },
 
