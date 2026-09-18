@@ -1,0 +1,10 @@
+{
+  "name": "Grok or Not 2.0 — AI Voice Arena",
+  "short_name": "Grok or Not",
+  "description": "Hot or Not for models. Train your ear on Grok vs other AI voices.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#070708",
+  "theme_color": "#070708",
+  "lang": "en"
+}
