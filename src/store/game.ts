@@ -263,11 +263,19 @@ export const useGame = create<GameState>((set, get) => ({
     // Round-trip runSeed: classic/endless embed a decimal Number; daily embeds
     // daily-YYYY-MM-DD (must use daySeed, not hashSeed of that string).
     let raw = seedOnly || "challenge";
-    // Endless shares embed "endless-<seed>" so friends get the ramp deck, not classic.
+    // Endless / battle / detective shares tag the mode so friends get the same deal.
     let endless = false;
+    let battle = false;
+    let detective = false;
     if (raw === "endless" || raw.startsWith("endless-")) {
       endless = true;
       raw = raw === "endless" ? "challenge" : raw.slice("endless-".length) || "challenge";
+    } else if (raw === "battle" || raw.startsWith("battle-")) {
+      battle = true;
+      raw = raw === "battle" ? "challenge" : raw.slice("battle-".length) || "challenge";
+    } else if (raw === "detective" || raw.startsWith("detective-")) {
+      detective = true;
+      raw = raw === "detective" ? "challenge" : raw.slice("detective-".length) || "challenge";
     }
     const dailyMatch = /^daily-(\d{4}-\d{2}-\d{2})$/.exec(raw);
     let seed: number;
@@ -278,18 +286,35 @@ export const useGame = create<GameState>((set, get) => ({
     } else {
       seed = hashSeed(raw);
     }
-    const deck = endless ? dealEndless(seed) : dealClassic(pack, seed);
+    const mode: GameMode = endless
+      ? "endless"
+      : battle
+        ? "battle"
+        : detective
+          ? "detective"
+          : "classic";
+    const deck = endless
+      ? dealEndless(seed)
+      : detective
+        ? dealDetective(seed)
+        : battle
+          ? []
+          : dealClassic(pack, seed);
+    const battles = battle ? dealBattles(seed) : [];
+    const first = deck[0];
     set({
       phase: "playing",
-      mode: endless ? "endless" : "classic",
+      mode,
       pack,
       deck,
-      battles: [],
+      battles,
       ...resetPlayFields(),
       maxMisses: endless ? ENDLESS_MISSES : 0,
+      detectiveOptions:
+        detective && first ? detectiveChoices(first.model, 0) : [],
       challengeSeed: clean,
       challengeTarget: targetMatch ? Number(targetMatch[1]) : null,
-      runSeed: endless ? String(seed) : seedOnly || "challenge",
+      runSeed: endless || battle || detective ? String(seed) : seedOnly || "challenge",
     });
   },
 
@@ -514,7 +539,9 @@ export function makeChallengeCode(
   const seed =
     (runSeed && String(runSeed).trim()) ||
     Math.random().toString(36).slice(2, 8);
-  // Endless deals a different ramp deck than classic; tag so startChallenge can match.
+  // Mode-specific deals must be tagged so startChallenge can match (not classic).
   if (mode === "endless") return `${pack}-endless-${seed}-t${score}`;
+  if (mode === "battle") return `${pack}-battle-${seed}-t${score}`;
+  if (mode === "detective") return `${pack}-detective-${seed}-t${score}`;
   return `${pack}-${seed}-t${score}`;
 }
