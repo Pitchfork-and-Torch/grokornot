@@ -173,8 +173,10 @@ export const useProgress = create<ProgressState>()(
             dailyStreak = lastDailyDay === yesterday ? dailyStreak + 1 : 1;
             dailyPlays = dailyPlays + 1;
           }
+          // Same-day replay: keep the best score shown on Home / for badges context.
+          lastDailyScore =
+            s.lastDailyDay === today ? Math.max(s.lastDailyScore, p.score) : p.score;
           lastDailyDay = today;
-          lastDailyScore = p.score;
         }
 
         const patch: Partial<ProgressState> = {
@@ -209,14 +211,22 @@ export const useProgress = create<ProgressState>()(
       submitDaily: (score, accuracy, streak) => {
         const name = get().displayName.trim() || "Anonymous";
         const day = utcDayKey();
-        const entry: DailyEntry = {
-          day,
-          name,
-          score,
-          accuracy,
-          streak,
-          at: Date.now(),
-        };
+        const prev = get().dailyBoard.find((e) => e.day === day && e.name === name);
+        // Keep best-of-day: a worse replay must not replace a better score on the board.
+        const keepPrev = prev != null && prev.score > score;
+        const entry: DailyEntry = keepPrev
+          ? {
+              ...prev,
+              streak: Math.max(prev.streak, streak),
+            }
+          : {
+              day,
+              name,
+              score,
+              accuracy,
+              streak: Math.max(streak, prev?.streak ?? 0),
+              at: Date.now(),
+            };
         const board = [
           entry,
           ...get().dailyBoard.filter((e) => !(e.day === day && e.name === name)),
@@ -228,7 +238,7 @@ export const useProgress = create<ProgressState>()(
         set({
           dailyBoard: [...board, ...others],
           lastDailyDay: day,
-          lastDailyScore: score,
+          lastDailyScore: Math.max(get().lastDailyScore, entry.score),
         });
       },
     }),
