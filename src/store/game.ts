@@ -262,7 +262,13 @@ export const useGame = create<GameState>((set, get) => ({
     const seedOnly = targetMatch ? seedStr.slice(0, targetMatch.index) : seedStr;
     // Round-trip runSeed: classic/endless embed a decimal Number; daily embeds
     // daily-YYYY-MM-DD (must use daySeed, not hashSeed of that string).
-    const raw = seedOnly || "challenge";
+    let raw = seedOnly || "challenge";
+    // Endless shares embed "endless-<seed>" so friends get the ramp deck, not classic.
+    let endless = false;
+    if (raw === "endless" || raw.startsWith("endless-")) {
+      endless = true;
+      raw = raw === "endless" ? "challenge" : raw.slice("endless-".length) || "challenge";
+    }
     const dailyMatch = /^daily-(\d{4}-\d{2}-\d{2})$/.exec(raw);
     let seed: number;
     if (dailyMatch) {
@@ -272,17 +278,18 @@ export const useGame = create<GameState>((set, get) => ({
     } else {
       seed = hashSeed(raw);
     }
-    const deck = dealClassic(pack, seed);
+    const deck = endless ? dealEndless(seed) : dealClassic(pack, seed);
     set({
       phase: "playing",
-      mode: "classic",
+      mode: endless ? "endless" : "classic",
       pack,
       deck,
       battles: [],
       ...resetPlayFields(),
+      maxMisses: endless ? ENDLESS_MISSES : 0,
       challengeSeed: clean,
       challengeTarget: targetMatch ? Number(targetMatch[1]) : null,
-      runSeed: seedOnly || "challenge",
+      runSeed: endless ? String(seed) : seedOnly || "challenge",
     });
   },
 
@@ -497,10 +504,17 @@ export const useGame = create<GameState>((set, get) => ({
   },
 }));
 
-export function makeChallengeCode(pack: PackId, score: number, runSeed?: string | null): string {
+export function makeChallengeCode(
+  pack: PackId,
+  score: number,
+  runSeed?: string | null,
+  mode?: GameMode,
+): string {
   // Must reuse the run's deck seed  -  a fresh Math.random() made friends play a different deal.
   const seed =
     (runSeed && String(runSeed).trim()) ||
     Math.random().toString(36).slice(2, 8);
+  // Endless deals a different ramp deck than classic; tag so startChallenge can match.
+  if (mode === "endless") return `${pack}-endless-${seed}-t${score}`;
   return `${pack}-${seed}-t${score}`;
 }

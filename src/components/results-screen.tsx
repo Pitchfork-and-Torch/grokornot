@@ -41,7 +41,7 @@ export function ResultsScreen() {
   const total = history.length;
   const accuracy = total ? Math.round((correct / total) * 100) : 0;
 
-  const challengeCode = useMemo(() => makeChallengeCode(pack, score, runSeed), [pack, score, runSeed]);
+  const challengeCode = useMemo(() => makeChallengeCode(pack, score, runSeed, mode), [pack, score, runSeed, mode]);
   const challengeUrl =
     typeof window !== "undefined"
       ? `${window.location.origin}${window.location.pathname}?c=${challengeCode}`
