@@ -260,7 +260,18 @@ export const useGame = create<GameState>((set, get) => ({
     // and must not match a random seed that happens to contain t+digits (e.g. t12ab).
     const targetMatch = seedStr.match(/-t(\d+)$/);
     const seedOnly = targetMatch ? seedStr.slice(0, targetMatch.index) : seedStr;
-    const seed = hashSeed(seedOnly || "challenge");
+    // Round-trip runSeed: classic/endless embed a decimal Number; daily embeds
+    // daily-YYYY-MM-DD (must use daySeed, not hashSeed of that string).
+    const raw = seedOnly || "challenge";
+    const dailyMatch = /^daily-(\d{4}-\d{2}-\d{2})$/.exec(raw);
+    let seed: number;
+    if (dailyMatch) {
+      seed = daySeed(dailyMatch[1]!);
+    } else if (/^\d+$/.test(raw)) {
+      seed = Number(raw) >>> 0;
+    } else {
+      seed = hashSeed(raw);
+    }
     const deck = dealClassic(pack, seed);
     set({
       phase: "playing",
