@@ -61,6 +61,8 @@ type GameState = {
   lastBattle: BattlePair | null;
   challengeSeed: string | null;
   challengeTarget: number | null;
+  /** Deck seed string embedded in share links so friends play the same deal. */
+  runSeed: string | null;
 
   goHome: () => void;
   openStats: () => void;
@@ -92,12 +94,11 @@ function dealClassic(pack: PackId, seed?: number): Round[] {
   return shuffleWithSeed(roundsForPack(pack), s).slice(0, CLASSIC_SIZE);
 }
 
-function dealEndless(): Round[] {
+function dealEndless(seed = Date.now() % 1_000_000_000): Round[] {
   // ramp: easy first, then mix
   const easy = LIBRARY.filter((r) => r.difficulty === 1);
   const mid = LIBRARY.filter((r) => r.difficulty === 2);
   const hard = LIBRARY.filter((r) => r.difficulty === 3);
-  const seed = Date.now() % 1_000_000_000;
   const a = shuffleWithSeed(easy, seed).slice(0, 12);
   const b = shuffleWithSeed(mid, seed + 1).slice(0, 20);
   const c = shuffleWithSeed(hard, seed + 2).slice(0, 16);
@@ -125,8 +126,8 @@ function dealDetective(seed?: number): Round[] {
   return shuffleWithSeed(LIBRARY, s).slice(0, DETECTIVE_SIZE);
 }
 
-function dealBattles(): BattlePair[] {
-  return shuffleWithSeed(BATTLES, Date.now() % 1_000_000_000).slice(0, BATTLE_SIZE);
+function dealBattles(seed = Date.now() % 1_000_000_000): BattlePair[] {
+  return shuffleWithSeed(BATTLES, seed).slice(0, BATTLE_SIZE);
 }
 
 function detectiveChoices(correct: ModelId, salt = 0): ModelId[] {
@@ -157,6 +158,7 @@ function resetPlayFields() {
     lastBattle: null as BattlePair | null,
     challengeSeed: null as string | null,
     challengeTarget: null as number | null,
+    runSeed: null as string | null,
   };
 }
 
@@ -175,7 +177,8 @@ export const useGame = create<GameState>((set, get) => ({
   openOnboarding: () => set({ phase: "onboarding" }),
 
   startClassic: (pack, seed) => {
-    const deck = dealClassic(pack, seed);
+    const s = seed ?? Date.now() % 1_000_000_000;
+    const deck = dealClassic(pack, s);
     set({
       phase: "playing",
       mode: "classic",
@@ -183,22 +186,26 @@ export const useGame = create<GameState>((set, get) => ({
       deck,
       battles: [],
       ...resetPlayFields(),
+      runSeed: String(s),
     });
   },
 
   startEndless: () => {
+    const s = Date.now() % 1_000_000_000;
     set({
       phase: "playing",
       mode: "endless",
       pack: "mixed",
-      deck: dealEndless(),
+      deck: dealEndless(s),
       battles: [],
       ...resetPlayFields(),
       maxMisses: ENDLESS_MISSES,
+      runSeed: String(s),
     });
   },
 
   startDaily: () => {
+    const day = utcDayKey();
     set({
       phase: "playing",
       mode: "daily",
@@ -206,11 +213,13 @@ export const useGame = create<GameState>((set, get) => ({
       deck: dealDaily(),
       battles: [],
       ...resetPlayFields(),
+      runSeed: `daily-${day}`,
     });
   },
 
   startDetective: () => {
-    const deck = dealDetective();
+    const s = Date.now() % 1_000_000_000;
+    const deck = dealDetective(s);
     const first = deck[0];
     set({
       phase: "playing",
@@ -220,17 +229,20 @@ export const useGame = create<GameState>((set, get) => ({
       battles: [],
       ...resetPlayFields(),
       detectiveOptions: first ? detectiveChoices(first.model, 0) : [],
+      runSeed: String(s),
     });
   },
 
   startBattle: () => {
+    const s = Date.now() % 1_000_000_000;
     set({
       phase: "playing",
       mode: "battle",
       pack: "mixed",
       deck: [],
-      battles: dealBattles(),
+      battles: dealBattles(s),
       ...resetPlayFields(),
+      runSeed: String(s),
     });
   },
 
@@ -259,6 +271,7 @@ export const useGame = create<GameState>((set, get) => ({
       ...resetPlayFields(),
       challengeSeed: clean,
       challengeTarget: targetMatch ? Number(targetMatch[1]) : null,
+      runSeed: seedOnly || "challenge",
     });
   },
 
@@ -473,7 +486,10 @@ export const useGame = create<GameState>((set, get) => ({
   },
 }));
 
-export function makeChallengeCode(pack: PackId, score: number): string {
-  const seed = Math.random().toString(36).slice(2, 8);
+export function makeChallengeCode(pack: PackId, score: number, runSeed?: string | null): string {
+  // Must reuse the run's deck seed  -  a fresh Math.random() made friends play a different deal.
+  const seed =
+    (runSeed && String(runSeed).trim()) ||
+    Math.random().toString(36).slice(2, 8);
   return `${pack}-${seed}-t${score}`;
 }
