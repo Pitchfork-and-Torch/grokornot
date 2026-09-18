@@ -97,6 +97,87 @@ function bumpConfusion(
   return { ...conf, [trueModel]: row };
 }
 
+
+const BADGE_IDS = new Set(BADGES.map((b) => b.id));
+
+function safeProgressNum(v: unknown, fallback = 0): number {
+  if (typeof v === "boolean") return fallback;
+  const n = typeof v === "number" ? v : Number(v);
+  if (!Number.isFinite(n) || n < 0) return fallback;
+  return n;
+}
+
+function safeInt(v: unknown, fallback = 0): number {
+  return Math.floor(safeProgressNum(v, fallback));
+}
+
+function sanitizeDailyEntry(raw: unknown): DailyEntry | null {
+  if (!raw || typeof raw !== "object") return null;
+  const e = raw as Partial<DailyEntry>;
+  const day =
+    typeof e.day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(e.day.trim())
+      ? e.day.trim()
+      : null;
+  const name = typeof e.name === "string" ? e.name.trim().slice(0, 24) : "";
+  if (!day || !name) return null;
+  const accuracy = safeProgressNum(e.accuracy, 0);
+  return {
+    day,
+    name,
+    score: safeInt(e.score),
+    accuracy: accuracy > 1 ? Math.min(accuracy / 100, 1) : Math.min(accuracy, 1),
+    streak: safeInt(e.streak),
+    at: safeInt(e.at, Date.now()),
+  };
+}
+
+function sanitizeProgress(persisted: unknown, current: ProgressState): ProgressState {
+  const raw =
+    persisted && typeof persisted === "object"
+      ? (persisted as Partial<ProgressState>)
+      : {};
+  const badges = Array.isArray(raw.badges)
+    ? (raw.badges.filter((id): id is BadgeId => typeof id === "string" && BADGE_IDS.has(id as BadgeId)) as BadgeId[])
+    : [];
+  const dailyBoard = Array.isArray(raw.dailyBoard)
+    ? raw.dailyBoard.map(sanitizeDailyEntry).filter((e): e is DailyEntry => e != null).slice(0, 60)
+    : [];
+  const displayName =
+    typeof raw.displayName === "string" ? raw.displayName.trim().slice(0, 24) : "";
+  const lastDailyDay =
+    typeof raw.lastDailyDay === "string" && /^\d{4}-\d{2}-\d{2}$/.test(raw.lastDailyDay.trim())
+      ? raw.lastDailyDay.trim()
+      : null;
+
+  return {
+    ...current,
+    displayName,
+    xp: safeInt(raw.xp),
+    badges,
+    totalRounds: safeInt(raw.totalRounds),
+    totalCorrect: safeInt(raw.totalCorrect),
+    bestStreak: safeInt(raw.bestStreak),
+    allTimeBest: safeInt(raw.allTimeBest),
+    gamesPlayed: safeInt(raw.gamesPlayed),
+    dailyPlays: safeInt(raw.dailyPlays),
+    lastDailyDay,
+    lastDailyScore: safeInt(raw.lastDailyScore),
+    dailyStreak: safeInt(raw.dailyStreak),
+    modelHits: raw.modelHits && typeof raw.modelHits === "object" ? raw.modelHits : {},
+    packHits: raw.packHits && typeof raw.packHits === "object" ? raw.packHits : {},
+    confusion: raw.confusion && typeof raw.confusion === "object" ? raw.confusion : {},
+    detectiveCorrect: safeInt(raw.detectiveCorrect),
+    battleWins: safeInt(raw.battleWins),
+    endlessBest: safeInt(raw.endlessBest),
+    perfectClassics: safeInt(raw.perfectClassics),
+    dailyBoard,
+    soundOn: Boolean(raw.soundOn),
+    lightMode: Boolean(raw.lightMode),
+    onboarded: Boolean(raw.onboarded),
+  };
+}
+
+
 export const useProgress = create<ProgressState>()(
   persist(
     (set, get) => ({
@@ -124,7 +205,7 @@ export const useProgress = create<ProgressState>()(
       lightMode: false,
       onboarded: false,
 
-      setName: (name) => set({ displayName: name.slice(0, 24) }),
+      setName: (name) => set({ displayName: String(name ?? "").trim().slice(0, 24) }),
       setSound: (on) => set({ soundOn: on }),
       setLightMode: (on) => set({ lightMode: on }),
       setOnboarded: (v) => set({ onboarded: v }),
@@ -175,16 +256,18 @@ export const useProgress = create<ProgressState>()(
           }
           // Same-day replay: keep the best score shown on Home / for badges context.
           lastDailyScore =
-            s.lastDailyDay === today ? Math.max(s.lastDailyScore, p.score) : p.score;
+            s.lastDailyDay === today
+              ? Math.max(s.lastDailyScore, safeInt(p.score))
+              : safeInt(p.score);
           lastDailyDay = today;
         }
 
         const patch: Partial<ProgressState> = {
-          xp: s.xp + p.xpGained,
-          totalRounds: s.totalRounds + p.total,
-          totalCorrect: s.totalCorrect + p.correct,
-          bestStreak: Math.max(s.bestStreak, p.bestStreak),
-          allTimeBest: Math.max(s.allTimeBest, p.score),
+          xp: s.xp + safeInt(p.xpGained),
+          totalRounds: s.totalRounds + safeInt(p.total),
+          totalCorrect: s.totalCorrect + safeInt(p.correct),
+          bestStreak: Math.max(s.bestStreak, safeInt(p.bestStreak)),
+          allTimeBest: Math.max(s.allTimeBest, safeInt(p.score)),
           gamesPlayed: s.gamesPlayed + 1,
           modelHits,
           packHits,
@@ -238,13 +321,14 @@ export const useProgress = create<ProgressState>()(
         set({
           dailyBoard: [...board, ...others],
           lastDailyDay: day,
-          lastDailyScore: Math.max(get().lastDailyScore, entry.score),
+          lastDailyScore: Math.max(get().lastDailyScore, safeInt(entry.score)),
         });
       },
     }),
     {
       name: "grok-or-not-2-progress",
       version: 2,
+      merge: (persisted, current) => sanitizeProgress(persisted, current),
     },
   ),
 );
