@@ -356,14 +356,16 @@ export const useGame = create<GameState>((set, get) => ({
       ? basePoints(mode, pair.difficulty) + streakBonus(nextStreak)
       : 0;
     const xp = xpForResult(correct, mode, pair.difficulty);
-    const trueModel = pair.left.isGrok ? pair.left.model : pair.right.model;
+    const grokSide = pair.left.isGrok ? pair.left : pair.right;
+    const trueModel = grokSide.model;
 
     set({
       phase: "reveal",
       lastCorrect: correct,
       lastPoints: points,
       lastModel: trueModel,
-      lastTells: chosen.tells,
+      // Always show the Grok answer's tells — chosen can be the decoy.
+      lastTells: grokSide.tells,
       lastGuessLabel: side === "left" ? "A" : "B",
       lastBattle: pair,
       battleSide: side,
